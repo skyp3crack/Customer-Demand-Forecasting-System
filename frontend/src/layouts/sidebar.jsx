@@ -11,7 +11,7 @@ import { cn } from "@/utils/cn";
 import PropTypes from "prop-types";
 
 export const Sidebar = forwardRef(({ collapsed }, ref) => {
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -22,6 +22,17 @@ export const Sidebar = forwardRef(({ collapsed }, ref) => {
             return;
         }
     };
+
+    // Filter navigation items based on user role
+    const filteredNavbarLinks = navbarLinks.map(section => ({
+        ...section,
+        links: section.links.filter(link => {
+            // If no roles are specified, show to all
+            if (!link.roles) return true;
+            // Check if user's role is in the allowed roles
+            return user?.RoleId && link.roles.includes(user.RoleId);
+        })
+    })).filter(section => section.links.length > 0); // Remove empty sections
 
     return (
         <aside
@@ -46,39 +57,37 @@ export const Sidebar = forwardRef(({ collapsed }, ref) => {
                 {!collapsed && <p className="text-lg font-medium text-slate-900 transition-colors dark:text-slate-50">Pharmaceutical</p>}
             </div>
             <div className="flex w-full flex-col gap-y-4 overflow-y-auto overflow-x-hidden p-3 [scrollbar-width:_thin]">
-                {navbarLinks.map((navbarLink) => (
-                    <nav
-                        key={navbarLink.title}
-                        className={cn("sidebar-group", collapsed && "md:items-center")}
-                    >
-                        <p className={cn("sidebar-group-title", collapsed && "md:w-[45px]")}>{navbarLink.title}</p>
-                        {navbarLink.links.map((link) => (
-                            link.path ? (
-                                <Link
-                                    key={link.label}
-                                    to={link.path}
-                                    className={cn("sidebar-item", collapsed && "md:w-[45px]", location.pathname === link.path ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800')}
-                                >
-                                    <link.icon
-                                        size={22}
-                                        className="flex-shrink-0"
-                                    />
-                                    {!collapsed && <p className="whitespace-nowrap">{link.label}</p>}
-                                </Link>
-                            ) : (
-                                <button
-                                    key={link.label}
-                                    onClick={() => handleNavClick(link.path, link.label)}
-                                    className={cn("sidebar-item w-full", collapsed && "md:w-[45px]")}
-                                >
-                                    <link.icon
-                                        size={22}
-                                        className="flex-shrink-0"
-                                    />
-                                    {!collapsed && <p className="whitespace-nowrap">{link.label}</p>}
-                                </button>
-                            )
-                        ))}
+                {filteredNavbarLinks.map((navbarLink) => (
+                    <nav key={navbarLink.title} className="flex flex-col gap-y-1">
+                        {!collapsed && (
+                            <h3 className="mb-1 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
+                                {navbarLink.title}
+                            </h3>
+                        )}
+                        <ul className="flex flex-col gap-y-1">
+                            {navbarLink.links.map((link) => (
+                                <li key={link.label}>
+                                    <Link
+                                        to={link.path || "#"}
+                                        onClick={(e) => {
+                                            if (!link.path) {
+                                                e.preventDefault();
+                                                handleNavClick(link.path, link.label);
+                                            }
+                                        }}
+                                        className={cn(
+                                            "group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                                            location.pathname === link.path
+                                                ? "bg-[#B13BFF] text-black dark:bg-[#471396] dark:text-white"
+                                                : "text-black hover:text-black dark:text-white dark:hover:text-white"
+                                        )}
+                                    >
+                                        <link.icon className="h-5 w-5 shrink-0 text-current" />
+                                        {!collapsed && <span>{link.label}</span>}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
                     </nav>
                 ))}
             </div>

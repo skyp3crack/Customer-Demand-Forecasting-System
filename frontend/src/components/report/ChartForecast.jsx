@@ -215,7 +215,7 @@ export default function ChartForecast({ data, uniqueDrugs, theme }) {
                 <div className="font-mono font-bold text-lg text-emerald-600 dark:text-emerald-400">
                   {chartData.length}
                 </div>
-                <div className="text-gray-500 dark:text-gray-400">Periods</div>
+                <div className="text-gray-500 dark:text-gray-400">Data Points</div>
               </div>
             </div>
           )}

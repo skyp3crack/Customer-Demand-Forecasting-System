@@ -183,8 +183,11 @@ async function verifyToken(req, res) {
       });
     }
     
+    // Get the User model
+    const User = require('../models').User;
+    
     // Verify the token
-    jwt.verify(token, process.env.PROJECT_JWT_SECRET, (err, decoded) => {
+    jwt.verify(token, process.env.PROJECT_JWT_SECRET, async (err, decoded) => {
       if (err) {
         return res.status(401).json({
           success: false,
@@ -193,15 +196,37 @@ async function verifyToken(req, res) {
         });
       }
       
-      // Token is valid
-      return res.json({
-        success: true,
-        user: {
-          id: decoded.uid,
-          email: decoded.email,
-          RoleId: decoded.RoleId
+      try {
+        // Get the full user data including the image
+        const user = await User.findByPk(decoded.id, {
+          attributes: { exclude: ['password', 'reset_token'] }
+        });
+        
+        if (!user) {
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
         }
-      });
+        
+        // Token is valid
+        return res.json({
+          success: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            RoleId: user.RoleId,
+            image: user.image // Include the image path
+          }
+        });
+      } catch (dbError) {
+        console.error('Database error during token verification:', dbError);
+        return res.status(500).json({
+          success: false,
+          message: 'Error fetching user data'
+        });
+      }
     });
   } catch (error) {
     console.error('Token verification error:', error);
@@ -251,42 +276,100 @@ async function signup(req, res, next) {
 
 // Password reset token validation handler
 async function passwordResetTokenValidation(req, res, next) {
-  passport.authenticate('forgotpasswordjwt', async (err, user) => {
+  passport.authenticate('forgotpasswordjwt', { session: false }, (err, user, info) => {
     try {
       if (err || !user) {
-        res.status(404).json({ error: err || 'User not found' });
-      } else if (!user.reset_token || user.reset_token !== req.body.token) {
-        res.status(422).json({ error: 'Token is invalid' });
-      } else {
-        res.json({ status: true });
+        console.error('Token validation failed:', err || 'No user found');
+        return res.status(404).json({ 
+          success: false, 
+          message: err?.message || 'Invalid or expired token' 
+        });
       }
-      next();
+      
+      if (!user.reset_token || user.reset_token !== req.body.token) {
+        console.error('Token mismatch:', { 
+          stored: user.reset_token ? 'exists' : 'missing', 
+          provided: req.body.token ? 'exists' : 'missing' 
+        });
+        return res.status(422).json({ 
+          success: false, 
+          message: 'Token is invalid or has been used' 
+        });
+      }
+      
+      // Token is valid
+      console.log(`✅ Token valid for user:`, { id: user.id, email: user.email });
+      return res.json({ 
+        success: true, 
+        message: 'Token is valid',
+        userId: user.id
+      });
+      
     } catch (error) {
-      res.status(500).json({ error });
-      next();
+      console.error('Error in token validation:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Internal server error during token validation',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   })(req, res, next);
 }
 
 // Password reset handler
 async function passwordReset(req, res, next) {
-  passport.authenticate('forgotpasswordjwt', async (err, user) => {
+  passport.authenticate('forgotpasswordjwt', { session: false }, async (err, user, info) => {
     try {
       if (err || !user) {
-        res.status(404).json({ error: err });
-        return;
+        console.error('Password reset failed - user not found or error:', err || 'No user');
+        return res.status(404).json({ 
+          success: false,
+          message: err?.message || 'Invalid or expired token' 
+        });
       }
-      if (!user.reset_token || user.reset_token !== req.body.token) {
-        res.status(422).json({ error: 'Token is invalid' });
-        return;
+
+      // Get the token from either query or body
+      const requestToken = req.body?.token || req.query?.token;
+      
+      if (!requestToken || user.reset_token !== requestToken) {
+        console.error('Password reset failed - token mismatch:', {
+          stored: user.reset_token ? 'exists' : 'missing',
+          provided: requestToken ? 'exists' : 'missing'
+        });
+        return res.status(422).json({ 
+          success: false,
+          message: 'Invalid or used token' 
+        });
       }
-      user.update({
-        password: bcrypt.hashSync(req.body.password, bcrypt.genSaltSync()),
-        reset_token: null,
+
+      if (!req.body.password) {
+        return res.status(400).json({
+          success: false,
+          message: 'New password is required'
+        });
+      }
+
+      // Update the user's password and clear the reset token
+      const hashedPassword = await bcrypt.hash(req.body.password, 10);
+      await user.update({
+        password: hashedPassword,
+        reset_token: null  // Clear the reset token after use
       });
-      res.json({ status: 'successfuly update user password' });
+
+      console.log(`✅ Password reset successful for user:`, { id: user.id, email: user.email });
+      
+      return res.json({ 
+        success: true, 
+        message: 'Password has been reset successfully' 
+      });
+      
     } catch (error) {
-      res.status(500).json({ error });
+      console.error('Error in password reset:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to reset password',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   })(req, res, next);
 }

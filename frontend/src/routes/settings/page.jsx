@@ -80,8 +80,10 @@ const SettingsPage = () => {
           </Typography>
           <Typography 
             variant="body1" 
-            color="text.secondary"
-            sx={{ fontSize: '1.1rem' }}
+            sx={{ 
+              fontSize: '1.1rem',
+              color: (theme) => alpha(theme.palette.primary.main, 0.8)
+            }}
           >
             Manage your account settings and preferences
           </Typography>

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
-const { getAvailableDrugs, getPerformanceReport,exportReport,getCombinedReport  } = require('../controllers/drugs');
+const { getAvailableDrugs, getPerformanceReport, exportReport, getCombinedReport, searchDrugs } = require('../controllers/drugs');
 const { authenticateJWT } = require('../middleware/auth');
 
 // Remove authenticateJWT since it's handled globally
@@ -30,5 +30,11 @@ router.get(
     exportReport
   );
 
+// Search drugs
+router.get(
+  '/search',
+  authenticateJWT,
+  searchDrugs
+);
 
 module.exports = router;

@@ -9,7 +9,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 const path = require('path');
-
+const helper = require('./helper');
+const GoogleOAuthStrategy = require('./strategies/google-oauth');
 // JWT Strategy for protected routes
 passport.use(
   'jwt',
@@ -78,6 +79,76 @@ passport.use(
   )
 );
 
+// JWT Strategy for password reset
+passport.use(
+  'forgotpasswordjwt',
+  new JWTstrategy(
+    {
+      secretOrKey: process.env.PROJECT_JWT_SECRET,
+      jwtFromRequest: (req) => {
+        // Try to get token from URL query parameter first (for email links)
+        let token = ExtractJWT.fromUrlQueryParameter('token')(req);
+        
+        // If not found in URL, try to get from request body
+        if (!token && req.body && req.body.token) {
+          token = req.body.token;
+        }
+        
+        return token;
+      },
+      passReqToCallback: true,
+      ignoreExpiration: true // We'll handle token expiration manually
+    },
+    async (req, token, done) => {
+      console.log('🔐 [Forgot Password JWT Strategy] Verifying token...');
+      
+      try {
+        // Decode the base64-encoded user ID
+        const userId = token.uid ? parseInt(helper.encoderBase64(token.uid, false), 10) : null;
+        
+        if (!userId) {
+          console.error('❌ No valid user ID found in reset token');
+          return done(null, false, { message: 'Invalid reset token' });
+        }
+
+        console.log(`🔍 Looking up user with ID: ${userId} for password reset`);
+        const user = await m.User.findByPk(userId);
+
+        if (!user) {
+          console.error(`❌ User not found with ID: ${userId}`);
+          return done(null, false, { message: 'User not found' });
+        }
+
+        // Check if token is expired (24 hours expiration)
+        const now = Math.floor(Date.now() / 1000);
+        if (token.exp && now > token.exp) {
+          console.error('❌ Reset token has expired');
+          return done(null, false, { message: 'Reset token has expired' });
+        }
+
+        // Get the token from either query or body
+        const requestToken = req.body?.token || req.query?.token;
+        
+        // Verify the token matches the one stored in the user record
+        if (user.reset_token !== requestToken) {
+          console.error('❌ Reset token does not match');
+          return done(null, false, { message: 'Invalid reset token' });
+        }
+
+        console.log(`✅ Reset token is valid for user:`, {
+          id: user.id,
+          email: user.email
+        });
+        
+        return done(null, user);
+      } catch (error) {
+        console.error('❌ Error in forgot password JWT strategy:', error);
+        return done(error);
+      }
+    }
+  )
+);
+
 // Login strategy
 passport.use(
   'login',
@@ -96,7 +167,20 @@ passport.use(
         console.log('Looking up user by email:', email);
         const user = await m.User.findOne({ 
           where: { email },
-          include: [{ model: m.Role, attributes: ['id', 'name'] }]
+          include: [
+            { 
+              model: m.Role, 
+              attributes: ['id', 'name'] 
+            }
+          ],
+          // Explicitly include password field which is excluded by default
+          attributes: { 
+            include: ['password']
+          },
+          // Get raw data to bypass any instance methods that might interfere
+          raw: true,
+          // Make sure to include the Role association
+          nest: true
         });
 
         if (!user) {
@@ -107,19 +191,45 @@ passport.use(
         console.log('User found:', { 
           id: user.id, 
           email: user.email,
-          hasPassword: !!user.password 
+          hasPassword: !!user.password,
+          passwordFieldType: typeof user.password,
+          passwordLength: user.password ? user.password.length : 0,
+          isGoogleUser: !!user.googleId
         });
 
+        // For Google OAuth users without a password
+        if (user.googleId && !user.password) {
+          console.log('Google OAuth user attempting email/password login without a password');
+          return done(null, false, { 
+            error: 'password_required',
+            message: 'Please set a password for your account before logging in with email/password.',
+            email: user.email
+          });
+        }
+
+        // For regular users without a password
+        if (!user.password) {
+          console.log('Regular user has no password - this should not happen');
+          return done(null, false, { 
+            error: 'account_error',
+            message: 'Your account is not properly set up. Please contact support.'
+          });
+        }
+
+        // Verify the password
         console.log('Comparing passwords...');
         const validPassword = await bcrypt.compare(password, user.password);
+        console.log('Password comparison result:', validPassword);
         
         if (!validPassword) {
           console.log('Password comparison failed for user:', user.id);
-          return done(null, false, { error: 'Invalid email or password' });
+          return done(null, false, { 
+            error: 'invalid_credentials',
+            message: 'Invalid email or password' 
+          });
         }
 
         console.log('Password valid, generating tokens...');
-
         // Generate JWT token
         const token = jwt.sign(
           { 
@@ -339,6 +449,10 @@ async function cleanupExpiredTokens() {
     return 0;
   }
 }
+
+
+passport.use('google', GoogleOAuthStrategy);
+
 
 // Export functions
 module.exports = { 

@@ -173,6 +173,40 @@ async function updateProfile(req, res) {
   }
 }
 
+// Get current user's data
+async function getCurrentUser(req, res) {
+  try {
+    const user = await m.User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] },
+      include: [
+        { 
+          model: m.Role, 
+          attributes: ['id', 'name'] 
+        }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      user
+    });
+  } catch (error) {
+    console.error('Error fetching current user:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching user data',
+      error: error.message 
+    });
+  }
+}
+
 // Change user password
 async function changePassword(req, res) {
   try {
@@ -186,13 +220,24 @@ async function changePassword(req, res) {
       });
     }
 
-    // Find user by ID
-    const user = await m.User.findByPk(userId);
+    // Find user by ID with password field included
+    const user = await m.User.findByPk(userId, {
+      attributes: { include: ['password'] },
+      raw: true
+    });
     
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
+      });
+    }
+
+    // Check if user has a password set
+    if (!user.password) {
+      return res.status(400).json({
+        success: false,
+        message: 'No password set for this account. Please use password reset.'
       });
     }
 
@@ -210,7 +255,7 @@ async function changePassword(req, res) {
     user.password = await bcrypt.hash(newPassword, salt);
     
     // Save updated user
-    await user.save();
+    await m.User.update({ password: user.password }, { where: { id: userId } });
 
     res.json({
       success: true,
@@ -230,8 +275,9 @@ module.exports = {
   getDetails,
   passwordForgot,
   verifyUser,
-  index,
   getProfile,
   updateProfile,
-  changePassword
+  changePassword,
+  getCurrentUser,
+  index
 };

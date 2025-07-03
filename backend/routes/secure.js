@@ -59,6 +59,9 @@ router.get('/auth-test', authenticateJWT, (req, res) => {
   });
 });
 
+// User profile routes
+router.get('/users/me', authenticateJWT, c.user.getCurrentUser);
+
 // Profile routes
 router.route('/users/profile')
   .get(authenticateJWT, c.user.getProfile)  // Get current user's profile

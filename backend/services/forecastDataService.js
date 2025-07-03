@@ -401,7 +401,7 @@ const forecastDataService = {
     }
   },
 
-  // New method to fetch all forecast data (historical or predicted)
+  // New method to fetch all forecast data (predicted only)
   async getAllForecasts() {
     try {
       const forecasts = await forecastData.findAll({

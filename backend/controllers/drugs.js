@@ -248,9 +248,60 @@ const getCombinedReport = async (req, res) => {
   }
 };
 
+/**
+ * Search for drugs by name or code
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const searchDrugs = async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || query.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query is required'
+      });
+    }
+
+    // Search in salesData for drugs that match the query
+    const drugs = await m.salesData.findAll({
+      attributes: ['drug'],
+      where: {
+        drug: {
+          [m.Sequelize.Op.iLike]: `%${query}%`
+        }
+      },
+      group: ['drug'],
+      limit: 10, // Limit to 10 results for performance
+      raw: true
+    });
+
+    // Extract just the drug codes
+    const results = drugs.map(item => ({
+      id: item.drug, // Using drug code as ID
+      name: item.drug, // Using drug code as name (you might want to map to actual names if available)
+      code: item.drug
+    }));
+
+    res.json({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    console.error('Error searching drugs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error searching drugs',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   getAvailableDrugs,
   getPerformanceReport,
   exportReport,
-  getCombinedReport
+  getCombinedReport,
+  searchDrugs
 };

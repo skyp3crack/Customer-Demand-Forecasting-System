@@ -106,7 +106,7 @@ const HomePage = () => {
                     </span>
                   </h1>
                   <p className="text-xl lg:text-2xl text-blue-100 font-medium">
-                    AI-Powered Admin Dashboard for Smart Pharmacy Management
+                    ML-Powered Admin Dashboard for Smart Pharmacy Management
                   </p>
                 </div>
               </div>

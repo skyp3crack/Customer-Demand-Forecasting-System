@@ -75,6 +75,17 @@ export const apiService = {
     }
   },
 
+  // Search for drugs
+  searchDrugs: async (query) => {
+    try {
+      const response = await api.get(`/api/drugs/search?query=${encodeURIComponent(query)}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error searching drugs:', error);
+      throw error;
+    }
+  },
+
   // Get drug performance report data
   getDrugPerformanceReport: async ({ drugIds, timePeriod = 'daily', startDate, endDate }) => {
     try {

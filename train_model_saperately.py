@@ -1,6 +1,6 @@
 from skopt import BayesSearchCV
 from skopt.space import Integer, Real
-from sklearn.metrics import make_scorer, mean_squared_error, mean_absolute_error
+from sklearn.metrics import make_scorer, mean_squared_error, mean_absolute_error, r2_score
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import train_test_split
@@ -135,6 +135,13 @@ df = pd.concat([df.reset_index(drop=True), weather_features_df], axis=1)
 def rmse(y_true, y_pred):
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
+def mape(y_true, y_pred):
+    y_true, y_pred = np.array(y_true), np.array(y_pred)
+    mask = y_true != 0
+    if not np.any(mask):
+        return np.nan  # or 0, or another indicator
+    return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+
 rmse_scorer = make_scorer(rmse, greater_is_better=False)
 
 # ----------- Define model configurations -----------
@@ -168,7 +175,7 @@ def get_model_config(model_type):
     
     return model, search_space
 
-# ----------- Model Training Loop -----------
+# ----------- Model Training Loop ----------- 
 min_required_rows = 20  # Minimum data points required
 all_results = []
 
@@ -188,12 +195,12 @@ for drug in drug_columns:
     
     # Drop rows with NaN values
     df_model = df_drug.dropna().copy()
-    
+
     # Skip if not enough data
     if df_model.shape[0] < min_required_rows:
         print(f"⚠️ Not enough data for {drug} (only {df_model.shape[0]} rows). Skipping.")
         continue
-    
+
     # Feature list - make sure all these columns exist
     feature_cols = ['Year', 'Month', 'DayOfWeek', 'Is_Weekend',
                    'max_temp', 'min_temp', 'weather_code'] + \
@@ -212,8 +219,12 @@ for drug in drug_columns:
     
     print(f"Training with {X.shape[0]} samples and {X.shape[1]} features")
     
-    # Create one train/test split to use for all models (for fair comparison)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # --- NEW: Split into train, validation, and test sets ---
+    # First, split off the test set (20%)
+    X_trainval, X_test, y_trainval, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Then, split trainval into train (60%) and validation (20%)
+    X_train, X_val, y_train, y_val = train_test_split(X_trainval, y_trainval, test_size=0.25, random_state=42)
+    # 0.25 x 0.8 = 0.2, so you get 60/20/20
 
     # Train and evaluate each model type
     for model_type in MODELS:
@@ -237,15 +248,33 @@ for drug in drug_columns:
             
             # Train the model
             opt.fit(X_train, y_train)
-            
             best_model = opt.best_estimator_
-            y_pred = best_model.predict(X_test)
-            
-            rmse_val = rmse(y_test, y_pred)
-            mae_val = mean_absolute_error(y_test, y_pred)
-            
+
+            # Validation predictions
+            val_pred = best_model.predict(X_val)
+            rmse_val = rmse(y_val, val_pred)
+            mae_val = mean_absolute_error(y_val, val_pred)
+            r2_val = r2_score(y_val, val_pred)
+
+            # Test predictions (for final unbiased evaluation)
+            test_pred = best_model.predict(X_test)
+            rmse_test = rmse(y_test, test_pred)
+            mae_test = mean_absolute_error(y_test, test_pred)
+            r2_test = r2_score(y_test, test_pred)
+
+            # Training predictions (for residuals and metrics)
+            train_pred = best_model.predict(X_train)
+            rmse_train = rmse(y_train, train_pred)
+            mae_train = mean_absolute_error(y_train, train_pred)
+            r2_train = r2_score(y_train, train_pred)
+
+            # Calculate MAPE for train, validation, and test sets
+            mape_train = mape(y_train, train_pred)
+            mape_val = mape(y_val, val_pred)
+            mape_test = mape(y_test, test_pred)
+
             print(f"✅ Best Params: {opt.best_params_}")
-            print(f"📊 RMSE: {rmse_val:.2f}, MAE: {mae_val:.2f}")
+            print(f"📊 RMSE: {rmse_val:.2f}, MAE: {mae_val:.2f}, R2: {r2_val:.2f}")
             
             # Feature importance (if available)
             if hasattr(best_model, 'feature_importances_'):
@@ -263,32 +292,90 @@ for drug in drug_columns:
             joblib.dump(best_model, model_path)
             print(f"📁 Saved: {model_path}")
             
-            # Store results
+            # Save per-sample test predictions for residual analysis (optional)
+            test_results = pd.DataFrame({
+                'Date': df_model.loc[X_test.index, 'datum'],
+                'Drug': drug,
+                'Model': model_type,
+                'Actual_Sales': y_test,
+                'Predicted_Sales': test_pred,
+                'Set': 'Test'
+            })
+            test_results.to_csv(f'residuals/residuals_{drug}_{model_type}_test.csv', index=False)
+
+            # Save per-sample training predictions for residual analysis
+            train_results = pd.DataFrame({
+                'Date': df_model.loc[X_train.index, 'datum'],
+                'Drug': drug,
+                'Model': model_type,
+                'Actual_Sales': y_train,
+                'Predicted_Sales': train_pred,
+                'Set': 'Train'
+            })
+            train_results.to_csv(f'residuals/residuals_{drug}_{model_type}_train.csv', index=False)
+
+            # Save per-sample validation predictions for residual analysis
+            val_results = pd.DataFrame({
+                'Date': df_model.loc[X_val.index, 'datum'],
+                'Drug': drug,
+                'Model': model_type,
+                'Actual_Sales': y_val,
+                'Predicted_Sales': val_pred,
+                'Set': 'Validation'
+            })
+            val_results.to_csv(f'residuals/residuals_{drug}_{model_type}_val.csv', index=False)
+
+            # Store train, validation, and test results
             all_results.append({
                 'Drug': drug,
                 'Model': model_type,
-                'RMSE': rmse_val,
-                'MAE': mae_val,
-                'Samples': X.shape[0],
+                'Set': 'Train',
+                'RMSE': rmse_train,
+                'MAE': mae_train,
+                'MAPE': mape_train,
+                'R2': r2_train,
+                'Samples': X_train.shape[0],
                 'Best Params': opt.best_params_
             })
-            
+            all_results.append({
+                'Drug': drug,
+                'Model': model_type,
+                'Set': 'Validation',
+                'RMSE': rmse_val,
+                'MAE': mae_val,
+                'MAPE': mape_val,
+                'R2': r2_val,
+                'Samples': X_val.shape[0],
+                'Best Params': opt.best_params_
+            })
+            all_results.append({
+                'Drug': drug,
+                'Model': model_type,
+                'Set': 'Test',
+                'RMSE': rmse_test,
+                'MAE': mae_test,
+                'MAPE': mape_test,
+                'R2': r2_test,
+                'Samples': X_test.shape[0],
+                'Best Params': opt.best_params_
+            })
+
         except Exception as e:
             print(f"❌ Error training {model_type} model for {drug}: {str(e)}")
 
 # Print summary of results
 if all_results:
     results_df = pd.DataFrame(all_results)
-    
+
     # Print overall summary
     print("\n📋 Summary of All Models:")
-    print(results_df[['Drug', 'Model', 'RMSE', 'MAE']])
-    
-    # Print best model for each drug
-    print("\n🏆 Best Model for Each Drug:")
-    best_models = results_df.loc[results_df.groupby('Drug')['RMSE'].idxmin()]
-    print(best_models[['Drug', 'Model', 'RMSE', 'MAE']])
-    
+    print(results_df[['Drug', 'Model', 'Set', 'RMSE', 'MAE', 'MAPE', 'R2']])
+
+    # Print best model for each drug (based on validation RMSE)
+    print("\n🏆 Best Model for Each Drug (Validation Set):")
+    best_models = results_df[results_df['Set'] == 'Validation'].loc[results_df[results_df['Set'] == 'Validation'].groupby('Drug')['RMSE'].idxmin()]
+    print(best_models[['Drug', 'Model', 'RMSE', 'MAE', 'R2']])
+
     # Save results
     results_df.to_csv('model_comparison_results.csv', index=False)
 else:

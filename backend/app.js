@@ -28,6 +28,8 @@ const reportsRoutes = require('./routes/reports');
 const drugsRoutes = require('./routes/drugs');
 const { handleValidationErrors } = require('./middleware/validation');
 
+const authGoogleRoutes = require('./routes/auth-google');
+
 // Configure CORS
 const allowedOrigins = [
   'http://localhost:3000',
@@ -93,6 +95,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // app.use(upload.array());
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
+app.use('/profile-images', express.static(path.join(__dirname, 'uploads/profile-images')));
 
 // Initialize passport
 require('./passport-loader'); // This configures passport strategies
@@ -127,6 +130,9 @@ app.use('/api/forecast', forecastRoutes);
 // Mount public routes first
 app.use('/api', openRoute_lists);
 app.use('/api/drugs', drugsRoutes);  // Mount drugs routes at /api/drugs
+
+// Mount auth routes at /auth
+app.use('/auth', authGoogleRoutes);
 
 // Mount protected routes with authentication
 app.use('/api', passport.authenticate('jwt', { session: false }));

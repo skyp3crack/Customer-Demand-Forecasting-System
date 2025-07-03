@@ -12,6 +12,7 @@ const useApi = () => {
   if (!context) {
     throw new Error('useApi must be used within an AuthProvider');
   }
+  // Return the api instance directly from the context
   return context.api;
 };
 
@@ -239,12 +240,6 @@ const DashboardPage = () => {
     // Get the authenticated API instance from the auth context
     const api = useApi();
     
-    // Set the base URL for the API if not already set
-    const baseURL = '/api'; // Use relative URL to leverage Vite proxy
-    if (api.defaults.baseURL !== baseURL) {
-      api.defaults.baseURL = baseURL;
-    }
-
     // Fetch drug data from the backend
     const fetchDrugData = async (type = 'monthly', start = null, end = null) => {
         setLoading(true);
@@ -546,7 +541,7 @@ const DashboardPage = () => {
                                     <Tooltip 
                                         formatter={(value, name) => [
                                             (isNaN(value) || value === null) ? 'N/A' : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                                            `Predicted Sales (${name})`
+                                            `(${name})`
                                         ]}
                                         labelFormatter={(label) => `Year: ${label}`}
                                     />
@@ -599,7 +594,7 @@ const DashboardPage = () => {
                                         // Remove the dollar sign from here
                                         formatter={(value, name) => [
                                             (isNaN(value) || value === null) ? 'N/A' : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
-                                            `Predicted Sales (${name})`
+                                            `(${name})`
                                         ]}
                                         labelFormatter={(label) => {
                                             if (timePeriod === 'daily') {

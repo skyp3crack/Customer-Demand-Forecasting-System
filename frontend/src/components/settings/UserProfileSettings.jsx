@@ -34,10 +34,14 @@ import {
   Cancel,
   CloudUpload
 } from '@mui/icons-material';
+import useToast from '@/hooks/useToast';
+
+const defaultProfileImg = '/src/assets/profile-image.jpg';
 
 const UserProfileSettings = () => {
   const { user, api, updateUser } = useAuth();
   const theme = useTheme();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const [formData, setFormData] = useState({
     name: '',
@@ -63,6 +67,37 @@ const UserProfileSettings = () => {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
+  // Function to get the correct profile image URL or imported image
+  const getProfileImageUrl = (imagePath) => {
+    // If no image path, return the default imported image
+    if (!imagePath) {
+      return defaultProfileImg;
+    }
+    
+    // If it's already a full URL (for social logins), use it as is
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+    
+    // If it's a path starting with /uploads/profile-images, serve from /profile-images
+    if (imagePath.startsWith('/uploads/profile-images/')) {
+      return `http://localhost:3000${imagePath.replace('/uploads', '')}`;
+    }
+    
+    // If it's a path starting with /uploads, serve from /uploads
+    if (imagePath.startsWith('/uploads/')) {
+      return `http://localhost:3000${imagePath}`;
+    }
+    
+    // If it's a path to frontend assets or default image, return the imported default image
+    if (imagePath.includes('profile-image.jpg') || imagePath.includes('/src/assets/') || imagePath === 'profile-image.jpg') {
+      return defaultProfileImg;
+    }
+    
+    // For any other local paths, assume they're from the backend
+    return `http://localhost:3000${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+  };
+
   // Initialize form with user data
   useEffect(() => {
     if (user) {
@@ -71,7 +106,7 @@ const UserProfileSettings = () => {
         name: user.name || '',
         email: user.email || '',
         phone: user.phone || '',
-        previewImage: user.image || ''
+        previewImage: getProfileImageUrl(user.image || '')
       }));
     }
   }, [user]);
@@ -153,13 +188,30 @@ const UserProfileSettings = () => {
       });
 
       if (response.data) {
-        setSuccess('Profile updated successfully!');
-        updateUser(response.data);
+        const successMsg = 'Profile updated successfully!';
+        setSuccess(successMsg);
+        // Update the user context with the new data
+        updateUser({
+          ...user, // Keep existing user data
+          name: response.data.name || user.name,
+          phone: response.data.phone || user.phone,
+          image: response.data.image || user.image
+        });
+        // Update the form data to reflect the changes
+        setFormData(prev => ({
+          ...prev,
+          name: response.data.name || prev.name,
+          phone: response.data.phone || prev.phone,
+          previewImage: response.data.image ? getProfileImageUrl(response.data.image) : prev.previewImage
+        }));
         setIsEditing(false);
+        toast.success(successMsg);
       }
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(err.response?.data?.message || 'An error occurred while updating your profile');
+      const errorMsg = err.response?.data?.message || 'An error occurred while updating your profile';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -172,13 +224,17 @@ const UserProfileSettings = () => {
     setPasswordSuccess('');
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('New passwords do not match');
+      const errorMsg = 'New passwords do not match';
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters');
+      const errorMsg = 'Password must be at least 8 characters';
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
       return;
     }
@@ -189,7 +245,10 @@ const UserProfileSettings = () => {
         newPassword: passwordData.newPassword
       });
 
-      setPasswordSuccess('Password changed successfully!');
+      const successMsg = 'Password changed successfully!';
+      setPasswordSuccess(successMsg);
+      toast.success(successMsg);
+      
       setPasswordData({
         currentPassword: '',
         newPassword: '',
@@ -197,7 +256,9 @@ const UserProfileSettings = () => {
       });
     } catch (err) {
       console.error('Error changing password:', err);
-      setPasswordError(err.response?.data?.message || 'Failed to change password');
+      const errorMsg = err.response?.data?.message || 'Failed to change password';
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -322,8 +383,8 @@ const UserProfileSettings = () => {
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <Box sx={{ position: 'relative', mb: 3 }}>
                           <Avatar
-                            src={formData.previewImage || null}
-                            alt={user.name}
+                            src={formData.previewImage}
+                            alt={formData.name}
                             sx={{ 
                               width: 160, 
                               height: 160, 
@@ -333,7 +394,7 @@ const UserProfileSettings = () => {
                               boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.3)}`,
                             }}
                           >
-                            {!formData.previewImage && (user?.name?.[0]?.toUpperCase() || 'U')}
+                            {!formData.previewImage || formData.previewImage === defaultProfileImg ? (formData.name?.[0]?.toUpperCase() || 'U') : null}
                           </Avatar>
                           
                           {isEditing && (
@@ -371,7 +432,7 @@ const UserProfileSettings = () => {
                         </Box>
                         
                         <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                          {user.name || 'User'}
+                          {formData.name || 'User'}
                         </Typography>
                         
                         <Chip 
@@ -475,13 +536,14 @@ const UserProfileSettings = () => {
                           <Button
                             variant="outlined"
                             onClick={() => {
-                              setFormData(prev => ({
-                                ...prev,
+                              // Reset form data to current user data
+                              setFormData({
                                 name: user.name || '',
+                                email: user.email || '',
                                 phone: user.phone || '',
                                 image: null,
-                                previewImage: user.image || ''
-                              }));
+                                previewImage: getProfileImageUrl(user.image || '')
+                              });
                               setError('');
                               setSuccess('');
                               setIsEditing(false);

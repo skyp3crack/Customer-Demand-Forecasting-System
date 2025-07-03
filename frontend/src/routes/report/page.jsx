@@ -6,10 +6,13 @@ import ChartActual from '../../components/report/ChartActual';
 import ChartForecast from '../../components/report/ChartForecast';
 import DataTable from '../../components/report/DataTable';
 import FiltersPanel from '../../components/report/FiltersPanel';
+import ShareReportButton from '../../components/report/ShareReportButton';
+import useToast from '../../hooks/useToast';
 
 export default function ReportPage() {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const { theme } = useContext(ThemeProviderContext);
+  const toast = useToast();
   const [availableDrugs, setAvailableDrugs] = useState([]);
   const [selectedDrugs, setSelectedDrugs] = useState([]);
   const [reportData, setReportData] = useState({ actual: [], forecast: [] });
@@ -19,7 +22,7 @@ export default function ReportPage() {
   const [dateRanges, setDateRanges] = useState({
     actual: {
       start: '2014-01-01',
-      end: '2014-12-31',
+      end: '2014-02-01',
     },
     forecast: {
       start: new Date().toISOString().split('T')[0],
@@ -140,6 +143,16 @@ export default function ReportPage() {
     return Array.from(drugs);
   }, [reportData]);
 
+  // Generate a report title based on selected drugs and date range
+  const reportTitle = useMemo(() => {
+    const drugNames = selectedDrugs.length > 0 
+      ? selectedDrugs.join(', ')
+      : 'All Drugs';
+    const startDate = new Date(dateRanges.actual.start).toLocaleDateString();
+    const endDate = new Date(dateRanges.forecast.end).toLocaleDateString();
+    return `Demand Forecast Report - ${drugNames} (${startDate} to ${endDate})`;
+  }, [selectedDrugs, dateRanges]);
+
   // Handle drug selection change
   const handleDrugSelect = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
@@ -165,11 +178,14 @@ export default function ReportPage() {
   // Handle export
   const handleExport = async (format) => {
     if (selectedDrugs.length === 0) {
-      setError('Please select at least one drug to export');
+      const errorMsg = 'Please select at least one drug to export';
+      setError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     try {
+      setIsLoading(true);
       const params = {
         drugIds: selectedDrugs.join(','),
         actualStart: dateRanges.actual.start,
@@ -205,9 +221,16 @@ export default function ReportPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      
+      const successMsg = `Report exported successfully as ${filename}`;
+      toast.success(successMsg);
     } catch (err) {
       console.error('Export failed:', err);
-      setError('Failed to export report. Please try again.');
+      const errorMsg = err.response?.data?.message || 'Failed to export report. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -215,9 +238,17 @@ export default function ReportPage() {
     <div className={`min-h-screen flex flex-col ${theme === 'dark' ? 'dark' : ''}`}>
       
       <main className="flex-1 container mx-auto px-4 py-8">
-        <h1 className="title mb-4">
-          Drug Sales Report
-        </h1>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Demand Forecast Report</h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              View and analyze demand forecast data
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            <ShareReportButton reportTitle={reportTitle} />
+          </div>
+        </div>
         
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-6">

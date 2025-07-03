@@ -4,7 +4,7 @@ import axios from 'axios';
 // Create axios instance with default config
 const createApiInstance = () => {
   const instance = axios.create({
-    baseURL: 'http://localhost:3000/api',
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
     withCredentials: true, // This is crucial for sending cookies
     headers: {
       'Content-Type': 'application/json',
@@ -47,7 +47,7 @@ const createApiInstance = () => {
       
       try {
         console.log('Attempting to refresh token...');
-        const response = await axios.post('http://localhost:3000/api/auth/refresh-token', 
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/auth/refresh-token`, 
           {},
           {
             withCredentials: true,
@@ -87,6 +87,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
 
   const checkAuth = useCallback(async () => {
@@ -134,81 +135,109 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, [checkAuth]);
 
+  // Forgot password method
+  const forgotPassword = async (email) => {
+    try {
+      setError(null);
+      setMessage('');
+      
+      const response = await api.post('/auth/forgot-password', {
+        email,
+        redirect_url: `${window.location.origin}/reset-password`
+      });
+      
+      setMessage('If an account exists with this email, you will receive a password reset link.');
+      return { success: true };
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to send reset email. Please try again.';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Reset password method
+  const resetPassword = async (token, newPassword) => {
+    try {
+      setError(null);
+      setMessage('');
+      
+      const response = await api.post('/auth/reset-password', {
+        token,
+        password: newPassword
+      });
+      
+      setMessage('Your password has been reset successfully!');
+      return { success: true };
+    } catch (error) {
+      console.error('Reset password error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to reset password. Please try again.';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  };
+
   const login = async (email, password) => {
     try {
-      setLoading(true);
       setError(null);
-      console.log('Attempting login for:', email);
-      
-      const response = await axios.post('http://localhost:3000/api/auth/login', 
-        { email, password },
-        {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        }
-      );
-      
-      console.log('Login response:', response);
+      const response = await api.post('/auth/login', { email, password });
+      console.log('Login response:', response.data);
       
       if (response.data.token) {
-        console.log('Login successful, setting token');
         localStorage.setItem('token', response.data.token);
-        setUser(response.data.user);
+        if (response.data.refreshToken) {
+          localStorage.setItem('refreshToken', response.data.refreshToken);
+        }
         setAuthenticated(true);
-        return true;
+        const userResponse = await api.get('/users/me');
+        if (userResponse.data.user) {
+          setUser(userResponse.data.user);
+        } else if (userResponse.data) {
+          setUser(userResponse.data);
+        }
+        return { success: true };
       }
-      
-      console.error('Login failed - no token in response');
-      setError('Login failed - no token received');
-      return false;
-      
+      return { success: false, error: response.data.message || 'Login failed' };
     } catch (error) {
-      let errorMessage = 'Login failed';
-      
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        console.error('Login error response:', error.response.data);
-        console.error('Status:', error.response.status);
-        console.error('Headers:', error.response.headers);
-        
-        errorMessage = error.response.data?.message || errorMessage;
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error('No response received:', error.request);
-        errorMessage = 'No response from server';
-      } else {
-        // Something happened in setting up the request
-        console.error('Request setup error:', error.message);
-        errorMessage = error.message;
+      console.error('Login error:', error);
+      // Handle the case where a Google OAuth user tries to log in with email/password
+      if (error.response?.data?.error === 'password_required') {
+        return { 
+          success: false, 
+          error: error.response.data.message || 'Password required',
+          requiresPasswordSetup: true,
+          email: error.response.data.email
+        };
       }
-      
+      const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
       setError(errorMessage);
-      return false;
-    } finally {
-      setLoading(false);
+      return { success: false, error: errorMessage };
     }
   };
 
   const logout = async () => {
     try {
-      console.log('Logging out...');
-      await api.post('/auth/logout', {}, { 
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
+      // Clear local storage first
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      
+      // Call the backend logout endpoint
+      await api.post('/auth/logout');
+      
+      // Clear user state
       setUser(null);
       setAuthenticated(false);
-      window.location.href = '/';
+      
+      // Redirect to login page
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if there's an error, clear local state
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      setUser(null);
+      setAuthenticated(false);
+      window.location.href = '/login';
     }
   };
 
@@ -230,7 +259,7 @@ export const AuthProvider = ({ children }) => {
 
       console.log('Attempting signup for:', userData.email);
       
-      const response = await axios.post('http://localhost:3000/api/auth/signup', formData, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/auth/signup`, formData, {
         withCredentials: true,
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -284,17 +313,33 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     error,
+    message,
     authenticated,
-    api,
+    api, // Add the api instance to the context
+    setUser,
+    setError,
+    setMessage,
+    setAuthenticated,
     login,
     logout,
     signup,
+    forgotPassword,
+    resetPassword,
     checkAuth,
     updateUser: (userData) => {
-      setUser(prevUser => ({
-        ...prevUser,
-        ...userData
-      }));
+      setUser(prevUser => {
+        if (!prevUser) return userData;
+        return {
+          ...prevUser,
+          ...userData,
+          // Ensure we don't lose any existing fields
+          name: userData.name !== undefined ? userData.name : prevUser.name,
+          email: userData.email !== undefined ? userData.email : prevUser.email,
+          phone: userData.phone !== undefined ? userData.phone : prevUser.phone,
+          image: userData.image !== undefined ? userData.image : prevUser.image,
+          // Add any other user fields that need to be preserved
+        };
+      });
     }
   };
 
