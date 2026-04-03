@@ -101,28 +101,30 @@ app.use('/profile-images', express.static(path.join(__dirname, 'uploads/profile-
 require('./passport-loader'); // This configures passport strategies
 app.use(passport.initialize());
 
-// Session is usually not needed with JWT
-// app.use(passport.session());
-// Add this before your routes
-app.get('/api/debug/check-secret', (req, res) => {
-  res.json({
-    hasSecret: !!process.env.PROJECT_JWT_SECRET,
-    secretLength: process.env.PROJECT_JWT_SECRET?.length || 0,
-    nodeEnv: process.env.NODE_ENV
-  });
-});
-// for serializing user data
+// for serializing user data (needed for req.login())
 passport.serializeUser((user, done) => {
   done(null, user);
 });
-
 passport.deserializeUser((user, done) => {
   done(null, user);
 });
 
-// Test routes (temporary)
-app.use('/test', testRoutes);
-app.use('/db-test', dbTestRoutes);
+// Session is usually not needed with JWT
+// app.use(passport.session());
+// Add this before your routes
+// Test routes — DEVELOPMENT ONLY
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/test', testRoutes);
+  app.use('/db-test', dbTestRoutes);
+  // Debug endpoint: check JWT secret presence
+  app.get('/api/debug/check-secret', (req, res) => {
+    res.json({
+      hasSecret: !!process.env.PROJECT_JWT_SECRET,
+      secretLength: process.env.PROJECT_JWT_SECRET?.length || 0,
+      nodeEnv: process.env.NODE_ENV
+    });
+  });
+}
 
 // Forecast data
 app.use('/api/forecast', forecastRoutes);

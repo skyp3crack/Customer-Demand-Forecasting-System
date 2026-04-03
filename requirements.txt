@@ -1,0 +1,37 @@
+# Python ML Pipeline — Requirements
+
+Install all dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Dependencies
+
+```
+pandas>=1.5.0
+numpy>=1.23.0
+scikit-learn>=1.2.0
+xgboost>=1.7.0
+joblib>=1.2.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+requests>=2.28.0
+```
+
+## Creating a Virtual Environment (Recommended)
+
+```bash
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+## Notes
+
+- Python ≥ 3.9 is required
+- XGBoost requires a C++ compiler on some platforms; see [XGBoost installation docs](https://xgboost.readthedocs.io/en/stable/install.html)

@@ -256,7 +256,7 @@ async function signup(req, res, next) {
       };
       
       const token = jwt.sign(jwt_content, process.env.PROJECT_JWT_SECRET, { 
-        expiresIn: 864000 // 10 days
+        expiresIn: '15m' // Match login flow — use refresh token for extended sessions
       });
       
       // Return token and user info (without sensitive data)

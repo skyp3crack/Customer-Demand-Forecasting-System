@@ -78,7 +78,7 @@ export const apiService = {
   // Search for drugs
   searchDrugs: async (query) => {
     try {
-      const response = await api.get(`/api/drugs/search?query=${encodeURIComponent(query)}`);
+      const response = await api.get(`/drugs/search?query=${encodeURIComponent(query)}`);
       return response.data;
     } catch (error) {
       console.error('Error searching drugs:', error);

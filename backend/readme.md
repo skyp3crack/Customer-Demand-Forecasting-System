@@ -45,6 +45,9 @@ npx nodemon
 ```zsh
 npx sequelize-cli db:migrate:undo:all && npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all
 npx sequelize-cli db:migrate:drop --table table_name 
+
+npx sequelize-cli model:generate --name User --attributes firstName:string,lastName:string,email:string
+
 ```
 
 ### Model & Seeder (example)
