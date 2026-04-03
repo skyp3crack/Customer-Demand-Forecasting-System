@@ -7,29 +7,16 @@ const forecastDataService = require('../services/forecastDataService');
 const path = require('path');
 const fs = require('fs');
 
-// CORS middleware
-router.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3001');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  
-  next();
-});
+// Note: CORS is handled globally in app.js — do NOT add route-level CORS headers here
 
 // Protected routes
-router.post('/import-forecast', 
-  authenticateJWT, 
+router.post('/import-forecast',
+  authenticateJWT,
   authorize([1]), // Use 1 instead of 'admin'
   importForecast
 );
 
-router.get('/forecasts', 
+router.get('/forecasts',
   authenticateJWT,
   getForecasts
 );
@@ -85,7 +72,7 @@ router.get('/forecasts',
  *                     type: string
  *                     example: "rf"
  */
-router.get('/monthly', 
+router.get('/monthly',
   authenticateJWT,
   async (req, res) => {
     try {
@@ -158,7 +145,7 @@ router.get('/monthly',
  *                     format: float
  *                     example: 156.72
  */
-router.get('/yearly', 
+router.get('/yearly',
   authenticateJWT,
   async (req, res) => {
     try {
@@ -234,7 +221,7 @@ router.get('/yearly',
  *                     type: string
  *                     example: "rf"
  */
-router.get('/daily', 
+router.get('/daily',
   authenticateJWT,
   async (req, res) => {
     try {
@@ -275,17 +262,17 @@ router.get('/daily',
  *       200:
  *         description: Successful operation
  */
-router.post('/import-daily-batch', 
-  authenticateJWT, 
+router.post('/import-daily-batch',
+  authenticateJWT,
   authorize([1]),
   async (req, res) => {
     try {
       console.log('Starting batch import...'); // Debug log
       const { year } = req.query;
       if (!year) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Year parameter is required' 
+        return res.status(400).json({
+          success: false,
+          error: 'Year parameter is required'
         });
       }
 
@@ -298,7 +285,7 @@ router.post('/import-daily-batch',
       for (const month of months) {
         const fileName = `daily_forecast_rf_${year}${month}01.csv`;
         const filePath = path.join(__dirname, '../../forecasts', fileName);
-        
+
         if (fs.existsSync(filePath)) {
           try {
             const result = await forecastDataService.importForecastData(filePath);
@@ -382,7 +369,7 @@ router.get('/historical/all',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
-  } 
+  }
 );
 
 /**
@@ -441,30 +428,30 @@ router.get('/heatmap',
 
     try {
       console.log('Heatmap request received with query:', req.query);
-      
+
       const { drug, startDate, endDate } = req.query;
-      
+
       // Validate inputs
       if (!drug) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Drug parameter is required',
-          received: req.query 
+          received: req.query
         });
       }
 
       if (!startDate || !endDate) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Both startDate and endDate are required',
-          received: req.query 
+          received: req.query
         });
       }
 
       // Validate date format
       const start = new Date(startDate);
       const end = new Date(endDate);
-      
+
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Invalid date format',
           received: { startDate, endDate }
         });
@@ -486,8 +473,8 @@ router.get('/heatmap',
         name: error.name,
         query: req.query
       });
-      
-      res.status(500).json({ 
+
+      res.status(500).json({
         error: 'Failed to fetch heatmap data',
         message: error.message,
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined

@@ -51,7 +51,7 @@ const corsOptions = {
   },
   credentials: true,  // This is important for cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'Pragma'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   maxAge: 600, // Cache preflight request for 10 minutes
   optionsSuccessStatus: 204, // Some legacy browsers choke on 204
