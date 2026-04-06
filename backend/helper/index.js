@@ -1,5 +1,6 @@
 const Sequelize = require('sequelize');
-const faker = require('faker');
+let faker;
+try { faker = require('faker'); } catch (e) { /* faker is a devDependency, not available in production */ }
 
 const env = process.env.NODE_ENV || 'development';
 const config = require('../config/config')[env];

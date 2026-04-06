@@ -5,15 +5,15 @@
  * Runs on every deploy (via render-start) but only inserts data if tables are empty.
  * 
  * Steps:
- *   1. Seed roles (admin, user)
- *   2. Import forecast CSV data (monthly + daily for 2025-2027)
- *   3. Import historical sales data from salesdaily.csv
+ *   1. Ensure all tables exist (sync as safety net)
+ *   2. Seed roles (admin, user)
+ *   3. Import forecast CSV data
+ *   4. Import historical sales data from salesdaily.csv
  */
 
 const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
-const { sequelize, Role, salesData, forecastData } = require('../models');
 
 // ─── Config ───────────────────────────────────────────────────
 const FORECASTS_DIR = path.join(__dirname, '../../forecasts');
@@ -23,7 +23,9 @@ const BATCH_SIZE = 500;
 
 // ─── Helpers ──────────────────────────────────────────────────
 function parseDate(str) {
+  if (!str) return null;
   const [m, d, y] = str.split('/');
+  if (!m || !d || !y) return null;
   return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
@@ -48,120 +50,97 @@ async function bulkInsert(model, rows, label) {
   console.log(`  ✓ ${label}: ${inserted} rows`);
 }
 
-// ─── 1. Seed Roles ───────────────────────────────────────────
-async function seedRoles() {
-  const count = await Role.count();
-  if (count > 0) {
-    console.log('  ✓ Roles: already seeded');
-    return;
-  }
-
-  const now = new Date();
-  await Role.bulkCreate([
-    { id: 1, name: 'admin', createdAt: now, updatedAt: now },
-    { id: 2, name: 'user', createdAt: now, updatedAt: now },
-  ]);
-  console.log('  ✓ Roles: created admin + user');
-}
-
-// ─── 2. Import Forecast CSVs ─────────────────────────────────
-async function importForecasts() {
-  const count = await forecastData.count();
-  if (count > 0) {
-    console.log(`  ✓ Forecasts: already populated (${count} rows)`);
-    return;
-  }
-
-  if (!fs.existsSync(FORECASTS_DIR)) {
-    console.log('  ⚠ Forecasts dir not found, skipping');
-    return;
-  }
-
-  const forecastService = require('../services/forecastDataService');
-  const years = ['2025', '2026', '2027'];
-  const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
-
-  // Monthly forecasts
-  for (const file of ['monthly_forecast_rf_202501.csv', 'monthly_forecast_rf_202506.csv']) {
-    const fp = path.join(FORECASTS_DIR, file);
-    if (fs.existsSync(fp)) {
-      try {
-        await forecastService.importForecastData(fp);
-        console.log(`  ✓ Imported ${file}`);
-      } catch (e) {
-        console.log(`  ⚠ Skipped ${file}: ${e.message}`);
-      }
-    }
-  }
-
-  // Daily forecasts
-  for (const year of years) {
-    for (const month of months) {
-      const file = `daily_forecast_rf_${year}${month}01.csv`;
-      const fp = path.join(FORECASTS_DIR, file);
-      if (fs.existsSync(fp)) {
-        try {
-          await forecastService.importForecastData(fp);
-        } catch (e) { /* skip if duplicate or missing */ }
-      }
-    }
-  }
-  
-  const finalCount = await forecastData.count();
-  console.log(`  ✓ Forecasts: ${finalCount} rows total`);
-}
-
-// ─── 3. Import Sales Data ────────────────────────────────────
-async function importSales() {
-  const count = await salesData.count();
-  if (count > 0) {
-    console.log(`  ✓ Sales: already populated (${count} rows)`);
-    return;
-  }
-
-  if (!fs.existsSync(SALES_CSV)) {
-    console.log('  ⚠ salesdaily.csv not found, skipping');
-    return;
-  }
-
-  const rawRows = await readCsv(SALES_CSV);
-  const rows = [];
-
-  for (const raw of rawRows) {
-    const date = parseDate(raw['datum']);
-    const year = parseInt(raw['Year']);
-    const month = parseInt(raw['Month']);
-    const hour = parseInt(raw['Hour']) || 0;
-    const weekday_name = raw['Weekday Name'] || '';
-
-    for (const drug of DRUG_CODES) {
-      const val = parseFloat(raw[drug]);
-      if (!isNaN(val)) {
-        rows.push({ drug, date, actual_sales: val, year, month, hour, weekday_name });
-      }
-    }
-  }
-
-  await bulkInsert(salesData, rows, 'Sales');
-}
-
 // ─── Main ────────────────────────────────────────────────────
 async function main() {
   console.log('\n🌱 Seed & Populate starting...\n');
 
+  // Import models AFTER environment is set
+  const db = require('../models');
+  const { sequelize, Role, forecastData, salesData } = db;
+
   try {
     await sequelize.authenticate();
-    console.log('  ✓ Database connected\n');
+    console.log('  ✓ Database connected');
 
-    await seedRoles();
-    await importForecasts();
-    await importSales();
+    // Safety net: ensure all tables exist even if migrations had issues
+    // alter: false means it won't modify existing tables, just create missing ones
+    console.log('  → Ensuring tables exist...');
+    await sequelize.sync({ alter: false });
+    console.log('  ✓ Tables verified\n');
+
+    // ─── 1. Seed Roles ───────────────────────────────────
+    const roleCount = await Role.count();
+    if (roleCount === 0) {
+      const now = new Date();
+      await Role.bulkCreate([
+        { id: 1, name: 'admin', createdAt: now, updatedAt: now },
+        { id: 2, name: 'user', createdAt: now, updatedAt: now },
+      ]);
+      console.log('  ✓ Roles: created admin + user');
+    } else {
+      console.log(`  ✓ Roles: already seeded (${roleCount})`);
+    }
+
+    // ─── 2. Import Forecast CSVs ─────────────────────────
+    const forecastCount = await forecastData.count();
+    if (forecastCount > 0) {
+      console.log(`  ✓ Forecasts: already populated (${forecastCount} rows)`);
+    } else if (!fs.existsSync(FORECASTS_DIR)) {
+      console.log('  ⚠ Forecasts dir not found, skipping');
+    } else {
+      // Try importing via forecastDataService
+      try {
+        const forecastService = require('../services/forecastDataService');
+        const csvFiles = fs.readdirSync(FORECASTS_DIR).filter(f => f.endsWith('.csv'));
+        let imported = 0;
+        for (const file of csvFiles) {
+          try {
+            await forecastService.importForecastData(path.join(FORECASTS_DIR, file));
+            imported++;
+          } catch (e) { /* skip duplicate/invalid files */ }
+        }
+        const finalCount = await forecastData.count();
+        console.log(`  ✓ Forecasts: imported ${imported} files (${finalCount} rows total)`);
+      } catch (e) {
+        console.log(`  ⚠ Forecast import failed: ${e.message}`);
+      }
+    }
+
+    // ─── 3. Import Sales Data ────────────────────────────
+    const salesCount = await salesData.count();
+    if (salesCount > 0) {
+      console.log(`  ✓ Sales: already populated (${salesCount} rows)`);
+    } else if (!fs.existsSync(SALES_CSV)) {
+      console.log('  ⚠ salesdaily.csv not found, skipping');
+    } else {
+      const rawRows = await readCsv(SALES_CSV);
+      const rows = [];
+
+      for (const raw of rawRows) {
+        const date = parseDate(raw['datum']);
+        if (!date) continue;
+
+        const year = parseInt(raw['Year']) || 0;
+        const month = parseInt(raw['Month']) || 0;
+        const hour = parseInt(raw['Hour']) || 0;
+        const weekday_name = raw['Weekday Name'] || '';
+
+        for (const drug of DRUG_CODES) {
+          const val = parseFloat(raw[drug]);
+          if (!isNaN(val)) {
+            rows.push({ drug, date, actual_sales: val, year, month, hour, weekday_name });
+          }
+        }
+      }
+
+      await bulkInsert(salesData, rows, 'Sales');
+    }
 
     console.log('\n✅ Seed & Populate complete!\n');
   } catch (err) {
     console.error('\n❌ Seed failed:', err.message);
-    // Don't exit with error — allow the app to start even if seeding fails
-    // The app will work, just without pre-loaded data
+    console.error(err.stack);
+    // Don't exit with error code — let the app start even if seeding fails
   }
 
   await sequelize.close();
