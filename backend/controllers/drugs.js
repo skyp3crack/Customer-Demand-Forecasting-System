@@ -269,7 +269,7 @@ const searchDrugs = async (req, res) => {
       attributes: ['drug'],
       where: {
         drug: {
-          [m.Sequelize.Op.iLike]: `%${query}%`
+          [m.sequelize.getDialect() === 'postgres' ? m.Sequelize.Op.iLike : m.Sequelize.Op.like]: `%${query}%`
         }
       },
       group: ['drug'],

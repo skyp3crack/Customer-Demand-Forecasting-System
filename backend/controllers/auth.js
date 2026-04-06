@@ -57,15 +57,14 @@ async function login(req, res, next) {
           });
         }
 
-        // For development, use more permissive cookie settings
+        // Production-aware cookie settings
         const isProduction = process.env.NODE_ENV === 'production';
         const cookieOptions = {
           httpOnly: true,
-          secure: false, // Set to false for local development without HTTPS
-          sameSite: 'lax', // Use 'lax' for local development
+          secure: isProduction,                        // true on HTTPS (Render), false locally
+          sameSite: isProduction ? 'none' : 'lax',     // 'none' for cross-origin (Vercel→Render)
           maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
           path: '/',
-          // Don't set domain for localhost
         };
 
         console.log('Setting refresh token cookie with options:', cookieOptions);
@@ -75,7 +74,7 @@ async function login(req, res, next) {
 
         // Set CORS headers
         res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Origin', req.headers.origin || 'http://localhost:3001');
+        res.header('Access-Control-Allow-Origin', req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:3001');
         res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
         

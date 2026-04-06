@@ -10,9 +10,13 @@ const db = {};
 
 let sequelize;
 
-if (config.dialect === 'postgres') {
+if (config.use_env_variable) {
+  // Production: Render provides DATABASE_URL via environment
+  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+} else if (config.dialect === 'postgres' && config.url) {
   sequelize = new Sequelize(config.url, config);
 } else {
+  // Development: use individual host/user/pass/db values (MySQL)
   sequelize = new Sequelize(config.database, config.username, config.password, config);
 }
 

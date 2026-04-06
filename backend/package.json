@@ -69,6 +69,7 @@
   "scripts": {
     "test": "NODE_ENV=test nyc mocha --recursive --exit 'Test/**/*.test.js' && ./node_modules/.bin/eslint --fix --ignore-path .gitignore .",
     "start": "node app.js",
+    "render-start": "npx sequelize-cli db:migrate --env production && node utils/seed-and-populate.js && node app.js",
     "lint": "./node_modules/.bin/eslint --fix --ignore-path .gitignore .",
     "erd": "sequelize-erd --source ./erd_generator.js --destination ./erd.svg"
   },

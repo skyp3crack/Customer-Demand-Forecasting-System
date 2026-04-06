@@ -1,0 +1,12 @@
+node_modules/
+.env
+*.env.local
+dist/
+uploads/
+__pycache__/
+*.pyc
+saved_models/*.pkl
+saved_models/*.joblib
+*.log
+.DS_Store
+Thumbs.db

@@ -30,13 +30,10 @@ const { handleValidationErrors } = require('./middleware/validation');
 
 const authGoogleRoutes = require('./routes/auth-google');
 
-// Configure CORS
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:3001',
-  'http://127.0.0.1:3001'
-];
+// Configure CORS — reads from env var in production, falls back to localhost for dev
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001')
+  .split(',')
+  .map(s => s.trim());
 
 // CORS configuration
 const corsOptions = {

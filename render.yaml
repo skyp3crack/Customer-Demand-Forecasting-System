@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: pharmforecast-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run render-start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pharmforecast-db
+          property: connectionString
+
+databases:
+  - name: pharmforecast-db
+    plan: free
+    databaseName: pharmforecast
