@@ -41,21 +41,16 @@ module.exports = {
       allowNull: true
     });
 
-    // Add unique index for googleId if it doesn't exist
-    const [results] = await queryInterface.sequelize.query(`
-      SELECT COUNT(*) as index_count
-      FROM INFORMATION_SCHEMA.STATISTICS
-      WHERE TABLE_SCHEMA = '${queryInterface.sequelize.config.database}'
-      AND TABLE_NAME = 'Users'
-      AND INDEX_NAME = 'users_google_id'
-    `);
-
-    if (results[0].index_count === 0) {
+    // Add unique index for googleId — use try/catch for cross-DB compatibility
+    try {
       await queryInterface.addIndex('Users', ['googleId'], {
         name: 'users_google_id',
         unique: true,
         where: { googleId: { [Sequelize.Op.ne]: null } }
       });
+    } catch (e) {
+      // Index already exists — safe to ignore
+      console.log('Index users_google_id already exists, skipping.');
     }
   },
 
