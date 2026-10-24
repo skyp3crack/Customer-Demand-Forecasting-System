@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { IS_DEMO, demoAdapter } from '@/services/demoApi';
 
 // Create axios instance with default config
 const createApiInstance = () => {
@@ -9,7 +10,8 @@ const createApiInstance = () => {
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
-    }
+    },
+    ...(IS_DEMO && { adapter: demoAdapter })
   });
 
   // Request interceptor to add auth token to requests

@@ -1,6 +1,7 @@
 import { ChartColumn, Home, LogInIcon, LogOutIcon, NotepadText, Package, PackagePlus, Settings, ShoppingBag, UserCheck, UserPlus, Users } from "lucide-react";
 import { MdDashboard } from "react-icons/md";
-import ProfileImage from "@/assets/profile-image.jpg";
+import { IS_DEMO } from "@/services/demoApi";
+import ProfileImage from "@/assets/profile-image.svg";
 import ProductImage from "@/assets/product-image.jpg";
 
 export const navbarLinks = [
@@ -89,7 +90,7 @@ export const navbarLinks = [
                 roles: [1, 2], 
             },
             {
-                label: "Logout",
+                label: IS_DEMO ? "Back to portfolio" : "Logout",
                 icon: LogOutIcon,
                 path: null,
                 roles: [1, 2], 
