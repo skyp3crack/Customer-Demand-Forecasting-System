@@ -1,7 +1,7 @@
 import { useTheme } from "@/hooks/use-theme";
 import { ChevronsLeft, Moon, Search as SearchIcon, Sun, X } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import defaultProfileImg from "@/assets/profile-image.jpg";
+import defaultProfileImg from "@/assets/profile-image.svg";
 import PropTypes from "prop-types";
 import { useState, useRef, useEffect } from "react";
 import { apiService } from "@/services/api";

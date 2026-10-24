@@ -16,6 +16,7 @@ import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
 import ErrorBoundary from '@/components/ErrorBoundary';
 import HomePage from "@/routes/home/page";
 import OAuthCallback from "@/pages/auth/OAuthCallback"; 
+import { IS_DEMO } from "@/services/demoApi";
 
 // Protected Route component with role-based access control
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -46,23 +47,23 @@ function App() {
         // Public routes
         {
             path: "/login",
-            element: <LoginPage />,
+            element: IS_DEMO ? <Navigate to="/dashboard/home" replace /> : <LoginPage />,
         },
         {
             path: "/signup",
-            element: <SignupPage />,
+            element: IS_DEMO ? <Navigate to="/dashboard/home" replace /> : <SignupPage />,
         },
         {
             path: "/forgot-password",
-            element: <ForgotPasswordPage />,
+            element: IS_DEMO ? <Navigate to="/dashboard/home" replace /> : <ForgotPasswordPage />,
         },
         {
             path: "/reset-password",
-            element: <ResetPasswordPage />,
+            element: IS_DEMO ? <Navigate to="/dashboard/home" replace /> : <ResetPasswordPage />,
         },
         {
             path: "/oauth-callback",
-            element: <OAuthCallback />,
+            element: IS_DEMO ? <Navigate to="/dashboard/home" replace /> : <OAuthCallback />,
         },
         // Protected routes
         {

@@ -44,3 +44,4 @@ coverage/
 
 # Local development
 *.local
+!.env.demo

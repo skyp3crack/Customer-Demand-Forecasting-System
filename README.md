@@ -69,6 +69,24 @@ Dashboard runs at `http://localhost:3001`.
 
 ---
 
+## Static Demo (no backend)
+
+The dashboard can also run as a fully static site, with no Node.js, MySQL or login. It reads pre-generated JSON from `frontend/public/demo-data/` through a mock API layer (`frontend/src/services/demoApi.js`) and signs in as a demo admin automatically.
+
+```bash
+cd frontend
+npm install
+npm run demo:data     # regenerate demo-data/*.json from forecasts/ and dataset/ (only after retraining)
+npm run build:demo    # static build in frontend/dist (uses .env.demo)
+npx vite --mode demo  # or run locally in demo mode
+```
+
+**Deploy on Vercel:** import this repo and set **Root Directory** to `frontend`. `frontend/vercel.json` already sets the build command (`npm run build:demo`) and the SPA rewrite, so no environment variables are needed.
+
+The demo is read-only: profile edits, report sharing and password flows are disabled, and the sidebar "Logout" becomes "Back to portfolio". Daily forecasts cover 2025-01-01 to 2027-12-31.
+
+---
+
 ## Drug Categories Supported
 
 | Code | Category |

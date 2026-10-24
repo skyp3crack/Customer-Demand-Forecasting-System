@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/auth-context";
 import { navbarLinks } from "@/constants";
+import { IS_DEMO, PORTFOLIO_URL } from "@/services/demoApi";
 
 import logoLight from "@/assets/logo-light.svg";
 import logoDark from "@/assets/logo-dark.svg";
@@ -16,7 +17,11 @@ export const Sidebar = forwardRef(({ collapsed }, ref) => {
     const location = useLocation();
 
     const handleNavClick = (path, label) => {
-        if (label === 'Logout') {
+        if (path === null) { // the sign-out / back-to-portfolio entry
+            if (IS_DEMO) {
+                window.location.href = PORTFOLIO_URL;
+                return;
+            }
             logout();
             navigate('/login');
             return;
